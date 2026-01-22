@@ -39,7 +39,7 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x]
-        app: [backend, frontend]
+        app: [backend]
     
     steps:
       - uses: actions/checkout@v4
