@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+        app: [backend, frontend]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      
+      - name: Install dependencies - ${{ matrix.app }}
+        run: npm ci
+        working-directory: apps/${{ matrix.app }}
+      
+      - name: Run ESLint - ${{ matrix.app }}
+        run: npm run lint
+        working-directory: apps/${{ matrix.app }}
+  
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+        app: [backend, frontend]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
+      
+      - name: Install dependencies - ${{ matrix.app }}
+        run: npm ci
+        working-directory: apps/${{ matrix.app }}
+      
+      - name: Run tests - ${{ matrix.app }}
+        run: npm test
+        working-directory: apps/${{ matrix.app }}
