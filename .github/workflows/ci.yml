@@ -1,4 +1,4 @@
-name: CI
+name: CI + CD
 
 on:
   push:
@@ -7,55 +7,92 @@ on:
     branches: [ main, develop ]
 
 jobs:
+  # =================
+  # LINT EXISTANT
+  # =================
   lint:
     runs-on: ubuntu-latest
-    
     strategy:
       matrix:
         node-version: [20.x]
         app: [backend, frontend]
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
-      
       - name: Install dependencies - ${{ matrix.app }}
         run: npm ci
         working-directory: apps/${{ matrix.app }}
-      
       - name: Run ESLint - ${{ matrix.app }}
         run: npm run lint
         working-directory: apps/${{ matrix.app }}
 
+  # =================
+  # BUILD EXISTANT
+  # =================
   build:
     needs: lint
     runs-on: ubuntu-latest
-    
     strategy:
       matrix:
         node-version: [20.x]
         app: [backend, frontend]
-    
     steps:
       - uses: actions/checkout@v4
-      
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
           cache-dependency-path: apps/${{ matrix.app }}/package-lock.json
-      
       - name: Install dependencies - ${{ matrix.app }}
         run: npm ci
         working-directory: apps/${{ matrix.app }}
-      
       - name: Build - ${{ matrix.app }}
         run: npm run build
         working-directory: apps/${{ matrix.app }}
+
+  # =================
+  # DEPLOY NOUVEAU
+  # =================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'  # DEPLOIEMENT UNIQUEMENT SUR MAIN
+    steps:
+      - uses: actions/checkout@v4
+
+      # Connexion à Azure
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Connexion au registry ACR
+      - name: Login to Azure Container Registry
+        run: |
+          echo ${{ secrets.ACR_PASSWORD }} | docker login ${{ secrets.ACR_LOGIN_SERVER }} \
+          -u ${{ secrets.ACR_USERNAME }} --password-stdin
+
+      # Build + Push Backend
+      - name: Build & Push Backend image
+        run: |
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/backend:latest ./apps/backend
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/backend:latest
+
+      # Build + Push Frontend
+      - name: Build & Push Frontend image
+        run: |
+          docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest ./apps/frontend
+          docker push ${{ secrets.ACR_LOGIN_SERVER }}/frontend:latest
+
+      # Redémarrage / Déploiement Azure
+      - name: Restart Azure Web App
+        run: |
+          az webapp restart \
+            --name MON_APP_NAME \
+            --resource-group MON_RESOURCE_GROUP
